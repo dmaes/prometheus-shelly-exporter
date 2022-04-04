@@ -5,118 +5,136 @@ import json
 import prometheus_client as prom
 import re
 import requests
-from collections import defaultdict
 from wsgiref import simple_server
 
 
-class TargetException(Exception):
+class ShellyException(Exception):
   pass
 
 
-class Target:
-  def __init__(self, target, username, password):
-    if target is None: raise TargetException("'target' cannot be empty")
-    self._target = target
-    self._username = username
-    self._password = password
-    self._type = self.get("/shelly")["type"]
 
-
-  @property
-  def type(self): return self._type
-
-
-  @property
-  def _auth(self):
-    if self._username is None or self._password is None: return None
-    return (self._username, self._password)
-
-
-  def get(self, path):
-    try:
-      _path = re.sub(r'^/', '', path)
-      url = f"http://{self._target}/{_path}"
-      req = requests.get(url, auth=self._auth)
-      return req.json()
-    except Exception as e:
-      raise TargetException(str(e))
-
-
-
-class Collector:
-  def __init__(self, target):
-    self._target = target
-    self._labels = {}
-    self._labels["type"] = self._target.type
+class Metrics:
+  def __init__(self, prefix, labels):
+    self._prefix = prefix
+    self._labels = labels
     self._metrics = {}
 
-
-  def _set_metric(self, metric, value, labels={}, help="", type="gauge"):
-    if metric not in self._metrics.keys():
-      self._metrics[metric] = {
+  def add(self, metric, value, labels={}, help="", type="gauge"):
+    _labels = {**self._labels, **labels}
+    _metric = f"{self._prefix}_{metric}" if self._prefix else metric
+    if _metric not in self._metrics.keys():
+      self._metrics[_metric] = {
             "help": help,
             "type": type,
             "values": [],
           }
-    self._metrics[metric]["values"] += [{"labels": labels, "value": value}]
+    self._metrics[_metric]["values"] += [{"labels": _labels, "value": value}]
 
-
-  def _set_metrics(self):
-    status = self._target.get("/status")
-    self._set_metric("wifi_sta_connected", status["wifi_sta"]["connected"])
-    self._set_metric("cloud_enabled", status["cloud"]["enabled"])
-    self._set_metric("cloud_connected", status["cloud"]["connected"])
-    self._set_metric("mqtt_connected", status["mqtt"]["connected"])
-    self._set_metric("serial", status["serial"])
-    self._set_metric("has_update", status["mqtt"]["connected"])
-    self._set_metric("ram_total", status["ram_total"])
-    self._set_metric("ram_free", status["ram_free"])
-    self._set_metric("fs_size", status["fs_size"])
-    self._set_metric("fs_free", status["fs_free"])
-    self._set_metric("uptime", status["uptime"], type="counter")
-
+  @property
+  def metrics(self):
+    return self._metrics
 
   def collect(self):
-    self._set_metrics()
+    for name, metric in self._metrics.items():
+      prom_metric = prom.Metric(name, metric["help"], metric["type"])
+      for value in metric["values"]:
+        prom_metric.add_sample(name, value=value["value"], labels=value["labels"])
+      yield prom_metric
 
-    for k, v in self._metrics.items():
-      mname = f"shelly_{k}"
-      metric = prom.Metric(mname, v["help"], v["type"])
-      for val in v["values"]:
-        metric.add_sample(mname, value=val["value"], labels={**self._labels, **val["labels"]})
-      yield metric
+  @staticmethod
+  def merge(metrics_list):
+    metrics = Metrics()
+    for item in metrics_list:
+      for name, metric in item.metrics:
+        for value in metric["values"]:
+          metrics.add(name, value["value"], value["labels"], metric["help"], metric["type"])
+    return metrics
 
 
+class Shelly:
+  def __init__(self, name, username, password):
+    if name is None: raise ShellyException("'name' cannot be empty")
+    self._name = name
+    self._auth = None if None in (username, password) else (username, password)
+    self._type = self.api("/shelly")["type"]
+    self._metrics = {}
 
-class SHPLGCollector(Collector):
-  def _set_metrics(self):
-    super()._set_metrics()
-    settings = self._target.get("/settings")
-    self._set_metric("max_power", settings["max_power"])
-    self._set_metric("led_status_disable", settings["led_status_disable"])
-    self._set_metric("led_power_disable", settings["led_power_disable"])
-    status = self._target.get("/status")
-    self._set_metric("temperature", status["temperature"])
-    self._set_metric("overtemperature", status["overtemperature"])
+  @property
+  def name(self):
+    return self._name
+
+  @property
+  def type(self):
+    return self._type
+
+  @property
+  def labels(self):
+    return {
+        "name": self.name,
+        "type": self.type,
+      }
+
+
+  def api(self, path):
+    try:
+      _path = re.sub(r'^/', '', path)
+      url = f"http://{self.name}/{_path}"
+      req = requests.get(url, auth=self._auth)
+      return req.json()
+    except Exception as e:
+      raise ShellyException(str(e))
+
+
+  def _get_metrics_base(self):
+    metrics = Metrics("shelly", self.labels)
+    status = self.api("/status")
+    metrics.add("wifi_sta_connected", status["wifi_sta"]["connected"])
+    metrics.add("cloud_enabled", status["cloud"]["enabled"])
+    metrics.add("cloud_connected", status["cloud"]["connected"])
+    metrics.add("mqtt_connected", status["mqtt"]["connected"])
+    metrics.add("serial", status["serial"])
+    metrics.add("has_update", status["mqtt"]["connected"])
+    metrics.add("ram_total", status["ram_total"])
+    metrics.add("ram_free", status["ram_free"])
+    metrics.add("fs_size", status["fs_size"])
+    metrics.add("fs_free", status["fs_free"])
+    metrics.add("uptime", status["uptime"], type="counter")
+    return metrics
+
+
+  def _get_metrics_plug(self):
+    metrics = self._get_metrics_base()
+    settings = self.api("/settings")
+    metrics.add("max_power", settings["max_power"])
+    metrics.add("led_status_disable", settings["led_status_disable"])
+    metrics.add("led_power_disable", settings["led_power_disable"])
+    status = self.api("/status")
+    metrics.add("temperature", status["temperature"])
+    metrics.add("overtemperature", status["overtemperature"])
     for i, r in enumerate(status["relays"]):
       labels = {"relay": str(i)}
-      self._set_metric("relay_ison", r["ison"], labels=labels)
-      self._set_metric("relay_has_timer", r["has_timer"], labels=labels)
+      metrics.add("relay_ison", r["ison"], labels=labels)
+      metrics.add("relay_has_timer", r["has_timer"], labels=labels)
       if r["has_timer"]:
-        self._set_metric("relay_timer_started", r["timer_started"], labels=labels)
-        self._set_metric("relay_timer_duration", r["timer_duration"], labels=labels)
-        self._set_metric("relay_timer_remaining", r["timer_remaining"], labels=labels)
-      self._set_metric("relay_overpower", r["overpower"], labels=labels)
+        metrics.add("relay_timer_started", r["timer_started"], labels=labels)
+        metrics.add("relay_timer_duration", r["timer_duration"], labels=labels)
+        metrics.add("relay_timer_remaining", r["timer_remaining"], labels=labels)
+      metrics.add("relay_overpower", r["overpower"], labels=labels)
     for i, m in enumerate(status["meters"]):
       labels = {"meter": str(i)}
-      self._set_metric("meter_power", m["power"], labels=labels)
-      # self._set_metric("meter_overpower", m["overpower"], labels=labels)
-      self._set_metric("meter_is_valid", m["is_valid"], labels=labels)
-      self._set_metric("meter_total", m["total"], labels=labels)
+      metrics.add("meter_power", m["power"], labels=labels)
+      # metrics.add("meter_overpower", m["overpower"], labels=labels)
+      metrics.add("meter_is_valid", m["is_valid"], labels=labels)
+      metrics.add("meter_total", m["total"], labels=labels)
+    return metrics
 
 
-collectors = defaultdict(lambda: Collector)
-collectors["SHPLG-S"] = SHPLGCollector
+  def get_metrics(self):
+    getters = {
+        "SHPLG-S": self._get_metrics_plug
+      }
+    metrics = getters[self.type]() if self.type in getters.keys() else self._get_metrics_base()
+    return metrics
 
 
 
@@ -125,10 +143,10 @@ class Prober:
     resp.content_type = falcon.MEDIA_TEXT
 
     try:
-      target = Target(req.get_param("target"), req.get_param("username"), req.get_param("password"))
+      shelly = Shelly(req.get_param("target"), req.get_param("username"), req.get_param("password"))
       resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
-      resp.text = prom.exposition.generate_latest(collectors[target.type](target))
-    except TargetException as e:
+      resp.text = prom.exposition.generate_latest(shelly.get_metrics())
+    except ShellyException as e:
       resp.status = falcon.HTTP_400
       resp.text = str(e)
 
