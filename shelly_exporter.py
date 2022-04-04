@@ -14,7 +14,7 @@ class ShellyException(Exception):
 
 
 class Metrics:
-  def __init__(self, prefix, labels):
+  def __init__(self, prefix=None, labels={}):
     self._prefix = prefix
     self._labels = labels
     self._metrics = {}
@@ -45,7 +45,7 @@ class Metrics:
   def merge(metrics_list):
     metrics = Metrics()
     for item in metrics_list:
-      for name, metric in item.metrics:
+      for name, metric in item.metrics.items():
         for value in metric["values"]:
           metrics.add(name, value["value"], value["labels"], metric["help"], metric["type"])
     return metrics
@@ -140,8 +140,6 @@ class Shelly:
 
 class Prober:
   def on_get(self, req, resp):
-    resp.content_type = falcon.MEDIA_TEXT
-
     try:
       shelly = Shelly(req.get_param("target"), req.get_param("username"), req.get_param("password"))
       resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
@@ -151,18 +149,59 @@ class Prober:
       resp.text = str(e)
 
 
-  def _common_metrics(self, target):
-    return json.dumps(target.get("/settings"))
+class Static:
+  def __init__(self, targets, username, password):
+    self._targets = targets
+    self._username = username
+    self._password = password
+
+  def on_get(self, req, resp):
+    metrics = []
+    try:
+      for target in self._targets:
+        shelly = Shelly(target, self._username, self._password)
+        metrics += [shelly.get_metrics()]
+      metrics = Metrics.merge(metrics)
+      resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
+      resp.text = prom.exposition.generate_latest(metrics)
+    except ShellyException as e:
+      resp.status = falcon.HTTP_400
+      resp.text = str(e)
 
 
 
-def run(addr, port):
+def run(addr, port, statics=[], static_username=None, static_password=None):
   api = falcon.App()
+  api.add_route('/metrics', Static(statics, static_username, static_password))
   api.add_route('/probe', Prober())
   httpd = simple_server.make_server(addr, port, api)
   httpd.serve_forever()
 
 
+def cli():
+  import argparse
+  parser = argparse.ArgumentParser(description="""
+Prometheus Exporter for Shelly devices.
+
+This exporter will scrape the API endpoints of Shelly devices.
+Device-specific metrics are auto-discovered based on the 'type' value of the '/shelly' endpoint.
+
+2 endpoints are provided:
+  * The '/probe' endpoint will do a single scrape of the target specified
+    with the 'target' URL parameter.
+    'username' and 'password' parameters can optionally be added if authentication is required.
+  * The '/metrics' endpoint will scrape all devices specified at startup
+    with the '-s|--static-targets' option.
+    Other relevant flags are '-U|--username' and '-P|--password'.
+""", formatter_class=argparse.RawDescriptionHelpFormatter)
+  parser.add_argument('-l', '--listen-ip', dest='addr', default='0.0.0.0', help="IP address for the exporter to listen on. Default: 0.0.0.0")
+  parser.add_argument('-p', '--listen-port', dest='port', type=int, default=9686, help="Port for the exporter to listen on. Default: 9686")
+  parser.add_argument('-s', '--static-targets', dest='statics', nargs='*', help="List of static targets to scrape when querying /metrics")
+  parser.add_argument('-U', '--username', dest='username', help="Username for the static targets (same for all)")
+  parser.add_argument('-P', '--password', dest='password', help="Password for the static targets (same for all)")
+  args = parser.parse_args()
+  run(args.addr, args.port, args.statics, args.username, args.password)
+
 
 if __name__ == '__main__':
-  run('0.0.0.0', 9999)
+  cli()
