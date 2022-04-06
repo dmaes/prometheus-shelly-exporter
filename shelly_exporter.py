@@ -89,44 +89,69 @@ class Shelly:
   def _get_metrics_base(self):
     metrics = Metrics("shelly", self.labels)
     status = self.api("/status")
-    metrics.add("wifi_sta_connected", status["wifi_sta"]["connected"])
-    metrics.add("cloud_enabled", status["cloud"]["enabled"])
-    metrics.add("cloud_connected", status["cloud"]["connected"])
-    metrics.add("mqtt_connected", status["mqtt"]["connected"])
-    metrics.add("serial", status["serial"])
-    metrics.add("has_update", status["mqtt"]["connected"])
-    metrics.add("ram_total", status["ram_total"])
-    metrics.add("ram_free", status["ram_free"])
-    metrics.add("fs_size", status["fs_size"])
-    metrics.add("fs_free", status["fs_free"])
-    metrics.add("uptime", status["uptime"], type="counter")
+    metrics.add("wifi_sta_connected", status["wifi_sta"]["connected"],
+        help="Current status of the WiFi connection (connected or not)")
+    metrics.add("cloud_enabled", status["cloud"]["enabled"],
+        help="Current cloud connection status (enabled or not)")
+    metrics.add("cloud_connected", status["cloud"]["connected"],
+        help="Current cloud connection status (connected or not)")
+    metrics.add("mqtt_connected", status["mqtt"]["connected"],
+        help="MQTT connection status, when MQTT is enabled (connected or not)")
+    metrics.add("serial", status["serial"],
+        help="Cloud serial number")
+    metrics.add("has_update", status["update"]["has_update"],
+        help="Whether an update is available")
+    metrics.add("ram_total", status["ram_total"],
+        help="Total amount of system memory in bytes")
+    metrics.add("ram_free", status["ram_free"],
+        help="Available amount of system memory in bytes")
+    metrics.add("fs_size", status["fs_size"],
+        help="Total amount of the file system in bytes")
+    metrics.add("fs_free", status["fs_free"],
+        help="Available amount of the file system in bytes")
+    metrics.add("uptime", status["uptime"], type="counter",
+        help="Seconds elapsed since boot")
     return metrics
 
 
   def _get_metrics_plug(self):
     metrics = self._get_metrics_base()
     settings = self.api("/settings")
-    metrics.add("max_power", settings["max_power"])
-    metrics.add("led_status_disable", settings["led_status_disable"])
-    metrics.add("led_power_disable", settings["led_power_disable"])
     status = self.api("/status")
-    metrics.add("temperature", status["temperature"])
-    metrics.add("overtemperature", status["overtemperature"])
+    metrics.add("max_power", settings["max_power"],
+        help="Overpower threshold in Watts")
+    if self.type == "SHPLG-S":  # PlugS only settings
+      metrics.add("led_status_disable", settings["led_status_disable"],
+          help="Whether LED indication for connection status is enabled")
+      metrics.add("led_power_disable", settings["led_power_disable"],
+          help="Whether LED indication for output status is enabled")
+      metrics.add("temperature", status["temperature"],
+          help="internal device temperature in °C")
+      metrics.add("overtemperature", status["overtemperature"],
+          help="true when device has overheated")
     for i, r in enumerate(status["relays"]):
       labels = {"relay": str(i)}
-      metrics.add("relay_ison", r["ison"], labels=labels)
-      metrics.add("relay_has_timer", r["has_timer"], labels=labels)
+      metrics.add("relay_ison", r["ison"], labels=labels,
+          help="Whether the channel is turned ON or OFF")
+      metrics.add("relay_has_timer", r["has_timer"], labels=labels,
+          help="Whether a timer is currently armed for this channel")
       if r["has_timer"]:
-        metrics.add("relay_timer_started", r["timer_started"], labels=labels)
-        metrics.add("relay_timer_duration", r["timer_duration"], labels=labels)
-        metrics.add("relay_timer_remaining", r["timer_remaining"], labels=labels)
+        metrics.add("relay_timer_started", r["timer_started"], labels=labels,
+            help="Unix timestamp of timer start; 0 if timer inactive or time not synced")
+        metrics.add("relay_timer_duration", r["timer_duration"], labels=labels,
+            help="Timer duration, s")
+        metrics.add("relay_timer_remaining", r["timer_remaining"], labels=labels,
+            help="If there is an active timer, shows seconds until timer elapses; 0 otherwise")
       metrics.add("relay_overpower", r["overpower"], labels=labels)
     for i, m in enumerate(status["meters"]):
       labels = {"meter": str(i)}
-      metrics.add("meter_power", m["power"], labels=labels)
+      metrics.add("meter_power", m["power"], labels=labels,
+          help="Current real AC power being drawn, in Watts")
       # metrics.add("meter_overpower", m["overpower"], labels=labels)
-      metrics.add("meter_is_valid", m["is_valid"], labels=labels)
-      metrics.add("meter_total", m["total"], labels=labels)
+      metrics.add("meter_is_valid", m["is_valid"], labels=labels,
+          help="Whether power metering self-checks OK")
+      metrics.add("meter_total", m["total"], labels=labels,
+          help="Total energy consumed by the attached electrical appliance in Watt-minute")
     return metrics
 
 
