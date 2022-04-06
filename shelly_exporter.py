@@ -2,6 +2,7 @@
 
 import falcon
 import json
+import os
 import prometheus_client as prom
 import re
 import requests
@@ -178,6 +179,11 @@ def run(addr, port, statics=[], static_username=None, static_password=None):
   httpd.serve_forever()
 
 
+def cli_env(env, default=None):
+  _env = f"SHELLY_{env}"
+  return os.environ.get(_env) if os.environ.get(_env) is not None else default
+
+
 def cli():
   import argparse
   parser = argparse.ArgumentParser(description="""
@@ -193,14 +199,15 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   * The '/metrics' endpoint will scrape all devices specified at startup
     with the '-s|--static-targets' option.
     Other relevant flags are '-U|--username' and '-P|--password'.
-""", formatter_class=argparse.RawDescriptionHelpFormatter)
-  parser.add_argument('-l', '--listen-ip', dest='addr', default='0.0.0.0', help="IP address for the exporter to listen on. Default: 0.0.0.0")
-  parser.add_argument('-p', '--listen-port', dest='port', type=int, default=9686, help="Port for the exporter to listen on. Default: 9686")
-  parser.add_argument('-s', '--static-targets', dest='statics', nargs='*', help="List of static targets to scrape when querying /metrics")
-  parser.add_argument('-U', '--username', dest='username', help="Username for the static targets (same for all)")
-  parser.add_argument('-P', '--password', dest='password', help="Password for the static targets (same for all)")
+""", formatter_class=argparse.RawDescriptionHelpFormatter,
+      epilog="All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')")
+  parser.add_argument('-l', '--listen-ip', dest='listen_ip', default=cli_env('LISTEN_IP', '0.0.0.0'), help="IP address for the exporter to listen on. Default: 0.0.0.0")
+  parser.add_argument('-p', '--listen-port', dest='listen_port', type=int, default=cli_env('LISTEN_PORT', 9686), help="Port for the exporter to listen on. Default: 9686")
+  parser.add_argument('-s', '--static-targets', dest='static_targets', default=cli_env('STATIC_TARGETS'), help="Comma-separated list of static targets to scrape when querying /metrics")
+  parser.add_argument('-U', '--username', dest='username', default=cli_env('USERNAME'), help="Username for the static targets (same for all)")
+  parser.add_argument('-P', '--password', dest='password', default=cli_env('PASSWORD'), help="Password for the static targets (same for all)")
   args = parser.parse_args()
-  run(args.addr, args.port, args.statics, args.username, args.password)
+  run(args.listen_ip, args.listen_port, args.static_targets.split(','), args.username, args.password)
 
 
 if __name__ == '__main__':

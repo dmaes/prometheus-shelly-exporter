@@ -7,8 +7,8 @@ I only implemented for the devices I personally have.
 
 ## Help
 ```
-usage: shelly_exporter.py [-h] [-l ADDR] [-p PORT] [-s [STATICS ...]]
-                          [-U USERNAME] [-P PASSWORD]
+usage: shelly_exporter.py [-h] [-l LISTEN_IP] [-p LISTEN_PORT]
+                          [-s STATIC_TARGETS] [-U USERNAME] [-P PASSWORD]
 
 Prometheus Exporter for Shelly devices.
 
@@ -25,16 +25,18 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
 
 options:
   -h, --help            show this help message and exit
-  -l ADDR, --listen-ip ADDR
+  -l LISTEN_IP, --listen-ip LISTEN_IP
                         IP address for the exporter to listen on. Default:
                         0.0.0.0
-  -p PORT, --listen-port PORT
+  -p LISTEN_PORT, --listen-port LISTEN_PORT
                         Port for the exporter to listen on. Default: 9686
-  -s [STATICS ...], --static-targets [STATICS ...]
-                        List of static targets to scrape when querying
-                        /metrics
+  -s STATIC_TARGETS, --static-targets STATIC_TARGETS
+                        Comma-separated list of static targets to scrape when
+                        querying /metrics
   -U USERNAME, --username USERNAME
                         Username for the static targets (same for all)
   -P PASSWORD, --password PASSWORD
                         Password for the static targets (same for all)
+
+All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')
 ```
