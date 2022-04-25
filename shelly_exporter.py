@@ -154,10 +154,37 @@ class Shelly:
           help="Total energy consumed by the attached electrical appliance in Watt-minute")
     return metrics
 
+  def _get_metrics_trv(self):
+    metrics = self._get_metrics_base()
+    settings = self.api("/settings")
+    status = self.api("/status")
+    metrics.add("bat_charge", status["bat"]["value"],
+            help="Percentage of battery level")
+    metrics.add("bat_voltage", status["bat"]["voltage"],
+            help="Battery voltage")
+    for i, r in enumerate(status["thermostats"]):
+        labels = {"thermostats": str(i)}
+        metrics.add("pos", r["pos"], labels=labels,
+            help="Position of thermostat pin")
+        metrics.add("thermostat_target_t", r["target_t"]["value"], labels=labels,
+            help="Thermostat target temperature")
+        metrics.add("thermostat_enabled", r["target_t"]["enabled"], labels=labels,
+            help="Whether the thermostat is enabled")
+        metrics.add("tmp", r["tmp"]["value"], labels=labels,
+            help="Thermostat measured temperature")
+        metrics.add("thermostat_is_scheduled", r["schedule"], labels=labels,
+            help="Whether the thermostat is following a schedule")
+        metrics.add("thermostat_schedule_profile", r["schedule_profile"], labels=labels,
+            help="Current thermostat profile")
+        metrics.add("thermostat_boost_minutes", r["boost_minutes"], labels=labels,
+            help="Length of initial warm-up boost, in minutes")
+    return metrics
+
 
   def get_metrics(self):
     getters = {
-        "SHPLG-S": self._get_metrics_plug
+        "SHPLG-S":  self._get_metrics_plug,
+        "SHTRV-01": self._get_metrics_trv
       }
     metrics = getters[self.type]() if self.type in getters.keys() else self._get_metrics_base()
     return metrics
