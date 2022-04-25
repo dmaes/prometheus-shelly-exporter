@@ -162,16 +162,24 @@ class Shelly:
             help="Percentage of battery level")
     metrics.add("bat_voltage", status["bat"]["voltage"],
             help="Battery voltage")
+    metrics.add("bat_charger", status["charger"],
+            help="Boolean to show whether a charger is plugged in")
     for i, r in enumerate(status["thermostats"]):
         labels = {"thermostats": str(i)}
         metrics.add("pos", r["pos"], labels=labels,
             help="Position of thermostat pin")
-        metrics.add("thermostat_target_t", r["target_t"]["value"], labels=labels,
-            help="Thermostat target temperature")
         metrics.add("thermostat_enabled", r["target_t"]["enabled"], labels=labels,
             help="Whether the thermostat is enabled")
-        metrics.add("tmp", r["tmp"]["value"], labels=labels,
+        metrics.add("thermostat_target_t", r["target_t"]["value"], labels=labels,
+            help="Thermostat target temperature")
+#        metrics.add("thermostat_target_unit", r["target_t"]["units"], labels=labels,
+#            help="Unit of the target temperature, either F or C")
+        metrics.add("thermostat_measured_temperature", r["tmp"]["value"], labels=labels,
             help="Thermostat measured temperature")
+#        metrics.add("thermostat_measured_unit", r["tmp"]["units"], labels=labels,
+#            help="Unit of the measured temperature, either F or C")
+        metrics.add("thermostat_measured_valid", r["tmp"]["is_valid"], labels=labels,
+                help="Whether the temperature measurement is valid")
         metrics.add("thermostat_is_scheduled", r["schedule"], labels=labels,
             help="Whether the thermostat is following a schedule")
         metrics.add("thermostat_schedule_profile", r["schedule_profile"], labels=labels,
