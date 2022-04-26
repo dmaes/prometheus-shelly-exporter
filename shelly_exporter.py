@@ -218,16 +218,18 @@ class Static:
 
   def on_get(self, req, resp):
     metrics = []
-    try:
-      for target in self._targets:
+    for target in self._targets:
+      try:
         shelly = Shelly(target, self._username, self._password)
         metrics += [shelly.get_metrics()]
-      metrics = Metrics.merge(metrics)
-      resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
-      resp.text = prom.exposition.generate_latest(metrics)
-    except ShellyException as e:
-      resp.status = falcon.HTTP_400
-      resp.text = str(e)
+      except ShellyException as e:
+        print(e)
+        m_down = Metrics("shelly", {"name": target})
+        m_down.add("down", True, help="Shelly can't be reached")
+        metrics += [m_down]
+    metrics = Metrics.merge(metrics)
+    resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
+    resp.text = prom.exposition.generate_latest(metrics)
 
 
 
