@@ -200,10 +200,8 @@ class Shelly:
             help="Air humidity, in %rH")
     metrics.add("humidity_valid", status["hum"]["is_valid"],
             help="Whether the humidity measurement is valid")
-    metrics.add("temperature_C", status["tmp"]["tC"],
-            help="Air temperature, in Celsius")
-    metrics.add("temperature_F", status["tmp"]["tF"],
-            help="Air temperature, in Fahrenheit")
+    metrics.add("temperature", status["tmp"]["value"],
+            help="Air temperature")
     metrics.add("temperature_valid", status["tmp"]["is_valid"],
             help="Whether the temperature measurement is valid")
     return metrics
