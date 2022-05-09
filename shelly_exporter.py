@@ -80,7 +80,7 @@ class Shelly:
     try:
       _path = re.sub(r'^/', '', path)
       url = f"http://{self.name}/{_path}"
-      req = requests.get(url, auth=self._auth)
+      req = requests.get(url, auth=self._auth, timeout=5)
       return req.json()
     except Exception as e:
       raise ShellyException(str(e))
@@ -188,11 +188,30 @@ class Shelly:
             help="Length of initial warm-up boost, in minutes")
     return metrics
 
+  def _get_metrics_HT(self):
+    metrics = self._get_metrics_base()
+    settings = self.api("/settings")
+    status = self.api("/status")
+    metrics.add("bat_charge", status["bat"]["value"],
+            help="Percentage of battery level")
+    metrics.add("bat_voltage", status["bat"]["voltage"],
+            help="Battery voltage")
+    metrics.add("humidity", status["hum"]["value"],
+            help="Air humidity, in %rH")
+    metrics.add("humidity_valid", status["hum"]["is_valid"],
+            help="Whether the humidity measurement is valid")
+    metrics.add("temperature", status["tmp"]["value"],
+            help="Air temperature")
+    metrics.add("temperature_valid", status["tmp"]["is_valid"],
+            help="Whether the temperature measurement is valid")
+    return metrics
+
 
   def get_metrics(self):
     getters = {
         "SHPLG-S":  self._get_metrics_plug,
-        "SHTRV-01": self._get_metrics_trv
+        "SHTRV-01": self._get_metrics_trv,
+        "SHHT-1":   self._get_metrics_HT
       }
     metrics = getters[self.type]() if self.type in getters.keys() else self._get_metrics_base()
     return metrics
