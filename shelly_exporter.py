@@ -53,12 +53,13 @@ class Metrics:
 
 
 class Shelly:
-  def __init__(self, name, username, password):
+  def __init__(self, name, username, password, timeout=5):
     if name is None: raise ShellyException("'name' cannot be empty")
     self._name = name
     self._auth = None if None in (username, password) else (username, password)
     self._type = self.api("/shelly")["type"]
     self._metrics = {}
+    self._timeout = timeout
 
   @property
   def name(self):
@@ -80,7 +81,7 @@ class Shelly:
     try:
       _path = re.sub(r'^/', '', path)
       url = f"http://{self.name}/{_path}"
-      req = requests.get(url, auth=self._auth, timeout=5)
+      req = requests.get(url, auth=self._auth, timeout=self._timeout)
       return req.json()
     except Exception as e:
       raise ShellyException(str(e))
@@ -219,9 +220,12 @@ class Shelly:
 
 
 class Prober:
+  def __init__(self, timeout=5):
+    self._timeout = timeout
+
   def on_get(self, req, resp):
     try:
-      shelly = Shelly(req.get_param("target"), req.get_param("username"), req.get_param("password"))
+      shelly = Shelly(req.get_param("target"), req.get_param("username"), req.get_param("password"), self._timeout)
       resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
       resp.text = prom.exposition.generate_latest(shelly.get_metrics())
     except ShellyException as e:
@@ -230,16 +234,17 @@ class Prober:
 
 
 class Static:
-  def __init__(self, targets, username, password):
+  def __init__(self, targets, username, password, timeout=5):
     self._targets = targets
     self._username = username
     self._password = password
+    self._timeout = timeout
 
   def on_get(self, req, resp):
     metrics = []
     for target in self._targets:
       try:
-        shelly = Shelly(target, self._username, self._password)
+        shelly = Shelly(target, self._username, self._password, self._timeout)
         metrics += [shelly.get_metrics()]
       except ShellyException as e:
         print(e)
@@ -252,10 +257,10 @@ class Static:
 
 
 
-def run(addr, port, statics=[], static_username=None, static_password=None):
+def run(addr, port, statics=[], static_username=None, static_password=None, timeout=5):
   api = falcon.App()
-  api.add_route('/metrics', Static(statics, static_username, static_password))
-  api.add_route('/probe', Prober())
+  api.add_route('/metrics', Static(statics, static_username, static_password, timeout))
+  api.add_route('/probe', Prober(timeout))
   httpd = simple_server.make_server(addr, port, api)
   httpd.serve_forever()
 
@@ -287,8 +292,9 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   parser.add_argument('-s', '--static-targets', dest='static_targets', default=cli_env('STATIC_TARGETS'), help="Comma-separated list of static targets to scrape when querying /metrics")
   parser.add_argument('-U', '--username', dest='username', default=cli_env('USERNAME'), help="Username for the static targets (same for all)")
   parser.add_argument('-P', '--password', dest='password', default=cli_env('PASSWORD'), help="Password for the static targets (same for all)")
+  parser.add_argument('-t', '--timeout', dest='timeout', default=cli_env('TIMEOUT'), help="Timeout (in seconds) to use when Scraping shelly devices. Default: 5")
   args = parser.parse_args()
-  run(args.listen_ip, args.listen_port, args.static_targets.split(','), args.username, args.password)
+  run(args.listen_ip, args.listen_port, args.static_targets.split(','), args.username, args.password, args.timeout)
 
 
 if __name__ == '__main__':
