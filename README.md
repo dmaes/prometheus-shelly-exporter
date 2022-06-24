@@ -9,6 +9,7 @@ I only implemented for the devices I personally have.
 ```
 usage: shelly_exporter.py [-h] [-l LISTEN_IP] [-p LISTEN_PORT]
                           [-s STATIC_TARGETS] [-U USERNAME] [-P PASSWORD]
+                          [-t TIMEOUT] [-f METRICSFILE]
 
 Prometheus Exporter for Shelly devices.
 
@@ -19,8 +20,12 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   * The '/probe' endpoint will do a single scrape of the target specified
     with the 'target' URL parameter.
     'username' and 'password' parameters can optionally be added if authentication is required.
+    If 'safe' parameter is set to 'true', metrics will aditionally be safed and included in the
+    results of the '/metrics' endpoint (Use-case are battery-powered devices that are in sleep mode
+    most of the time and wake up to push metrics. Configure /probe URL as URL to push updates to on
+    the battery-powered device).
   * The '/metrics' endpoint will scrape all devices specified at startup
-    with the '-s|--static-targets' option.
+    with the '-s|--static-targets' option, and those saved from the '/probe' endpoint.
     Other relevant flags are '-U|--username' and '-P|--password'.
 
 options:
@@ -37,6 +42,12 @@ options:
                         Username for the static targets (same for all)
   -P PASSWORD, --password PASSWORD
                         Password for the static targets (same for all)
+  -t TIMEOUT, --timeout TIMEOUT
+                        Timeout (in seconds) to use when Scraping shelly
+                        devices. Default: 5
+  -f METRICSFILE, --metricsfile METRICSFILE
+                        Pickle file to save metrics too (from
+                        /probe?safe=true). Default: metrics.pkl
 
 All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')
 ```

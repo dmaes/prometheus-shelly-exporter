@@ -3,9 +3,11 @@
 import falcon
 import json
 import os
+import pickle
 import prometheus_client as prom
 import re
 import requests
+import time
 from wsgiref import simple_server
 
 
@@ -50,6 +52,14 @@ class Metrics:
         for value in metric["values"]:
           metrics.add(name, value["value"], value["labels"], metric["help"], metric["type"])
     return metrics
+
+  def save_to_file(self, file, id_label="name"):
+    if os.path.isfile(file):
+      with open(file, 'rb') as pkl: pkl_metrics = pickle.load(pkl)
+    else: pkl_metrics = {}
+    pkl_metrics[self._labels[id_label]] = self
+    with open(file, 'wb') as pkl: pickle.dump(pkl_metrics, pkl)
+
 
 
 class Shelly:
@@ -189,7 +199,7 @@ class Shelly:
             help="Length of initial warm-up boost, in minutes")
     return metrics
 
-  def _get_metrics_HT(self):
+  def _get_metrics_ht(self):
     metrics = self._get_metrics_base()
     settings = self.api("/settings")
     status = self.api("/status")
@@ -212,7 +222,7 @@ class Shelly:
     getters = {
         "SHPLG-S":  self._get_metrics_plug,
         "SHTRV-01": self._get_metrics_trv,
-        "SHHT-1":   self._get_metrics_HT
+        "SHHT-1":   self._get_metrics_ht
       }
     metrics = getters[self.type]() if self.type in getters.keys() else self._get_metrics_base()
     return metrics
@@ -220,24 +230,30 @@ class Shelly:
 
 
 class Prober:
-  def __init__(self, timeout=5):
+  def __init__(self, metricsfile, timeout=5):
     self._timeout = timeout
 
   def on_get(self, req, resp):
     try:
       shelly = Shelly(req.get_param("target"), req.get_param("username"), req.get_param("password"), self._timeout)
+      metrics = shelly.get_metrics()
+      if req.get_param("save") == "true":
+        metrics.add("probetime", int(time.time()), type="counter",
+            help="Unixtime this target was probed and saved.")
+        metrics.save_to_file(metricsfile)
       resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
-      resp.text = prom.exposition.generate_latest(shelly.get_metrics())
+      resp.text = prom.exposition.generate_latest(metrics)
     except ShellyException as e:
       resp.status = falcon.HTTP_400
       resp.text = str(e)
 
 
 class Static:
-  def __init__(self, targets, username, password, timeout=5):
+  def __init__(self, targets, username, password, metricsfile, timeout=5):
     self._targets = targets
     self._username = username
     self._password = password
+    self._metricsfile = metricsfile
     self._timeout = timeout
 
   def on_get(self, req, resp):
@@ -251,16 +267,18 @@ class Static:
         m_down = Metrics("shelly", {"name": target})
         m_down.add("down", True, help="Shelly can't be reached")
         metrics += [m_down]
+    if os.path.isfile(self._metricsfile):
+      with open(file, 'rb') as pkl: metrics += pickle.load(pkl).items()
     metrics = Metrics.merge(metrics)
     resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
     resp.text = prom.exposition.generate_latest(metrics)
 
 
-
-def run(addr, port, statics=[], static_username=None, static_password=None, timeout=5):
+def run(addr, port, statics=[], static_username=None, static_password=None,
+    metricsfile="./shelly-metrics.pkl", timeout=5):
   api = falcon.App()
-  api.add_route('/metrics', Static(statics, static_username, static_password, timeout))
-  api.add_route('/probe', Prober(timeout))
+  api.add_route('/metrics', Static(statics, static_username, static_password, metricsfile, timeout))
+  api.add_route('/probe', Prober(metricsfile, timeout))
   httpd = simple_server.make_server(addr, port, api)
   httpd.serve_forever()
 
@@ -282,8 +300,12 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   * The '/probe' endpoint will do a single scrape of the target specified
     with the 'target' URL parameter.
     'username' and 'password' parameters can optionally be added if authentication is required.
+    If 'safe' parameter is set to 'true', metrics will aditionally be safed and included in the
+    results of the '/metrics' endpoint (Use-case are battery-powered devices that are in sleep mode
+    most of the time and wake up to push metrics. Configure /probe URL as URL to push updates to on
+    the battery-powered device).
   * The '/metrics' endpoint will scrape all devices specified at startup
-    with the '-s|--static-targets' option.
+    with the '-s|--static-targets' option, and those saved from the '/probe' endpoint.
     Other relevant flags are '-U|--username' and '-P|--password'.
 """, formatter_class=argparse.RawDescriptionHelpFormatter,
       epilog="All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')")
@@ -293,8 +315,9 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   parser.add_argument('-U', '--username', dest='username', default=cli_env('USERNAME'), help="Username for the static targets (same for all)")
   parser.add_argument('-P', '--password', dest='password', default=cli_env('PASSWORD'), help="Password for the static targets (same for all)")
   parser.add_argument('-t', '--timeout', dest='timeout', default=cli_env('TIMEOUT'), help="Timeout (in seconds) to use when Scraping shelly devices. Default: 5")
+  parser.add_argument('-f', '--metricsfile', dest='metricsfile', default=cli_env('METRICSFILE', 'metrics.pkl'), help="Pickle file to save metrics too (from /probe?safe=true). Default: metrics.pkl")
   args = parser.parse_args()
-  run(args.listen_ip, args.listen_port, args.static_targets.split(','), args.username, args.password, args.timeout)
+  run(args.listen_ip, args.listen_port, args.static_targets.split(','), args.username, args.password, args.metricsfile, args.timeout)
 
 
 if __name__ == '__main__':
