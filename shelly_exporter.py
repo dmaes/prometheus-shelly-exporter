@@ -269,7 +269,9 @@ class Static:
         m_down.add("down", True, help="Shelly can't be reached")
         metrics += [m_down]
     if os.path.isfile(self._metricsfile):
-      with open(file, 'rb') as pkl: metrics += pickle.load(pkl).items()
+      with open(file, 'rb') as pkl:
+        for target, metric in pickle.load(pkl).items():
+          if target not in self._targets: metrics += [metric]
     metrics = Metrics.merge(metrics)
     resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
     resp.text = prom.exposition.generate_latest(metrics)
@@ -306,7 +308,8 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
     most of the time and wake up to push metrics. Configure /probe URL as URL to push updates to on
     the battery-powered device).
   * The '/metrics' endpoint will scrape all devices specified at startup
-    with the '-s|--static-targets' option, and those saved from the '/probe' endpoint.
+    with the '-s|--static-targets' option, and those saved from the '/probe' endpoint
+    (with static targets overwriting saved probes, if one exists as both).
     Other relevant flags are '-U|--username' and '-P|--password'.
 """, formatter_class=argparse.RawDescriptionHelpFormatter,
       epilog="All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')")
