@@ -67,9 +67,9 @@ class Shelly:
     if name is None: raise ShellyException("'name' cannot be empty")
     self._name = name
     self._auth = None if None in (username, password) else (username, password)
+    self._timeout = timeout
     self._type = self.api("/shelly")["type"]
     self._metrics = {}
-    self._timeout = timeout
 
   @property
   def name(self):
@@ -231,6 +231,7 @@ class Shelly:
 
 class Prober:
   def __init__(self, metricsfile, timeout=5):
+    self._metricsfile = metricsfile
     self._timeout = timeout
 
   def on_get(self, req, resp):
@@ -240,7 +241,7 @@ class Prober:
       if req.get_param("save") == "true":
         metrics.add("probetime", int(time.time()), type="counter",
             help="Unixtime this target was probed and saved.")
-        metrics.save_to_file(metricsfile)
+        metrics.save_to_file(self._metricsfile)
       resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
       resp.text = prom.exposition.generate_latest(metrics)
     except ShellyException as e:
@@ -275,7 +276,7 @@ class Static:
 
 
 def run(addr, port, statics=[], static_username=None, static_password=None,
-    metricsfile="./shelly-metrics.pkl", timeout=5):
+    metricsfile="metrics.pkl", timeout=5):
   api = falcon.App()
   api.add_route('/metrics', Static(statics, static_username, static_password, metricsfile, timeout))
   api.add_route('/probe', Prober(metricsfile, timeout))
@@ -311,7 +312,7 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
       epilog="All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')")
   parser.add_argument('-l', '--listen-ip', dest='listen_ip', default=cli_env('LISTEN_IP', '0.0.0.0'), help="IP address for the exporter to listen on. Default: 0.0.0.0")
   parser.add_argument('-p', '--listen-port', dest='listen_port', type=int, default=cli_env('LISTEN_PORT', 9686), help="Port for the exporter to listen on. Default: 9686")
-  parser.add_argument('-s', '--static-targets', dest='static_targets', default=cli_env('STATIC_TARGETS'), help="Comma-separated list of static targets to scrape when querying /metrics")
+  parser.add_argument('-s', '--static-targets', dest='static_targets', default=cli_env('STATIC_TARGETS', ''), help="Comma-separated list of static targets to scrape when querying /metrics")
   parser.add_argument('-U', '--username', dest='username', default=cli_env('USERNAME'), help="Username for the static targets (same for all)")
   parser.add_argument('-P', '--password', dest='password', default=cli_env('PASSWORD'), help="Password for the static targets (same for all)")
   parser.add_argument('-t', '--timeout', dest='timeout', default=cli_env('TIMEOUT'), help="Timeout (in seconds) to use when Scraping shelly devices. Default: 5")
