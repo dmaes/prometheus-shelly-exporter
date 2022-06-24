@@ -315,13 +315,14 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
       epilog="All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')")
   parser.add_argument('-l', '--listen-ip', dest='listen_ip', default=cli_env('LISTEN_IP', '0.0.0.0'), help="IP address for the exporter to listen on. Default: 0.0.0.0")
   parser.add_argument('-p', '--listen-port', dest='listen_port', type=int, default=cli_env('LISTEN_PORT', 9686), help="Port for the exporter to listen on. Default: 9686")
-  parser.add_argument('-s', '--static-targets', dest='static_targets', default=cli_env('STATIC_TARGETS', ''), help="Comma-separated list of static targets to scrape when querying /metrics")
+  parser.add_argument('-s', '--static-targets', dest='static_targets', default=cli_env('STATIC_TARGETS'), help="Comma-separated list of static targets to scrape when querying /metrics")
   parser.add_argument('-U', '--username', dest='username', default=cli_env('USERNAME'), help="Username for the static targets (same for all)")
   parser.add_argument('-P', '--password', dest='password', default=cli_env('PASSWORD'), help="Password for the static targets (same for all)")
   parser.add_argument('-t', '--timeout', dest='timeout', default=cli_env('TIMEOUT'), help="Timeout (in seconds) to use when Scraping shelly devices. Default: 5")
   parser.add_argument('-f', '--metricsfile', dest='metricsfile', default=cli_env('METRICSFILE', 'metrics.pkl'), help="Pickle file to save metrics too (from /probe?safe=true). Default: metrics.pkl")
   args = parser.parse_args()
-  run(args.listen_ip, args.listen_port, args.static_targets.split(','), args.username, args.password, args.metricsfile, args.timeout)
+  static_targets = [] if args.static_targets == None else args.static_targets.split(',')
+  run(args.listen_ip, args.listen_port, static_targets, args.username, args.password, args.metricsfile, args.timeout)
 
 
 if __name__ == '__main__':
