@@ -269,7 +269,7 @@ class Static:
         m_down.add("down", True, help="Shelly can't be reached")
         metrics += [m_down]
     if os.path.isfile(self._metricsfile):
-      with open(file, 'rb') as pkl:
+      with open(self._metricsfile, 'rb') as pkl:
         for target, metric in pickle.load(pkl).items():
           if target not in self._targets: metrics += [metric]
     metrics = Metrics.merge(metrics)
@@ -303,7 +303,7 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   * The '/probe' endpoint will do a single scrape of the target specified
     with the 'target' URL parameter.
     'username' and 'password' parameters can optionally be added if authentication is required.
-    If 'safe' parameter is set to 'true', metrics will aditionally be safed and included in the
+    If 'save' parameter is set to 'true', metrics will aditionally be saved and included in the
     results of the '/metrics' endpoint (Use-case are battery-powered devices that are in sleep mode
     most of the time and wake up to push metrics. Configure /probe URL as URL to push updates to on
     the battery-powered device).
@@ -319,7 +319,7 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   parser.add_argument('-U', '--username', dest='username', default=cli_env('USERNAME'), help="Username for the static targets (same for all)")
   parser.add_argument('-P', '--password', dest='password', default=cli_env('PASSWORD'), help="Password for the static targets (same for all)")
   parser.add_argument('-t', '--timeout', dest='timeout', default=cli_env('TIMEOUT'), help="Timeout (in seconds) to use when Scraping shelly devices. Default: 5")
-  parser.add_argument('-f', '--metricsfile', dest='metricsfile', default=cli_env('METRICSFILE', 'metrics.pkl'), help="Pickle file to save metrics too (from /probe?safe=true). Default: metrics.pkl")
+  parser.add_argument('-f', '--metricsfile', dest='metricsfile', default=cli_env('METRICSFILE', 'metrics.pkl'), help="Pickle file to save metrics too (from /probe?save=true). Default: metrics.pkl")
   args = parser.parse_args()
   static_targets = [] if args.static_targets == None else args.static_targets.split(',')
   run(args.listen_ip, args.listen_port, static_targets, args.username, args.password, args.metricsfile, args.timeout)
