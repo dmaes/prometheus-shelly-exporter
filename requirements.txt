@@ -1,4 +1,5 @@
 argparse
 falcon
 prometheus_client
+pyyaml
 requests

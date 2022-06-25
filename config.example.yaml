@@ -1,0 +1,35 @@
+---
+# IP to listen on
+listen_ip: 0.0.0.0
+
+# Port to listen on
+listen_port: 9686
+
+# File to save probe-and-save metrics too
+metrics_file: metrics.pkl
+
+# Default timeout to use for targets (in seconds)
+timeout: 5
+
+# Default username to use for static_targets
+username: null
+
+# Default password to use for static_targets
+password: null
+
+# List of static targets to scrape when querying /metrics
+static_targets: []
+
+# Config for targets that will be scraped, both for /metrics and /probe
+targetcfg:
+  # Name of the target, must match `static_targets` item or `target` URL param
+  shplug.example.com:
+    # Username to use, overwrites global `username`
+    username: shelly
+    # Password to use, overwrites global `password`
+    password: shellyyllehs
+    # Timeout to use (in seconds), overwrites global `timeout`
+    timeout: 10
+    # Extra labels to add to the final metrics, as key:value pairs
+    extra_labels:
+      location: InASocket

@@ -63,13 +63,20 @@ class Metrics:
 
 
 class Shelly:
-  def __init__(self, name, username, password, timeout=5):
+  def __init__(self, name, username=None, password=None, timeout=5, extra_labels={}):
     if name is None: raise ShellyException("'name' cannot be empty")
     self._name = name
     self._auth = None if None in (username, password) else (username, password)
     self._timeout = timeout
     self._type = self.api("/shelly")["type"]
+    self._extra_labels = extra_labels
     self._metrics = {}
+
+  @staticmethod
+  def create_with_cfg(name, targetcfg, username=None, password=None, timeout=5, extra_labels={}):
+    cfg = targetcfg[name] if name in targetcfg.keys() else {}
+    return Shelly(**{ "username": username, "password": password, "timeout": timeout,
+      "extra_labels": extra_labels, **cfg, "name": name })
 
   @property
   def name(self):
@@ -82,6 +89,7 @@ class Shelly:
   @property
   def labels(self):
     return {
+        **self._extra_labels,
         "name": self.name,
         "type": self.type,
       }
@@ -230,18 +238,20 @@ class Shelly:
 
 
 class Prober:
-  def __init__(self, metricsfile, timeout=5):
-    self._metricsfile = metricsfile
+  def __init__(self, targetcfg, metrics_file, timeout):
+    self._targetcfg = targetcfg
+    self._metrics_file = metrics_file
     self._timeout = timeout
 
   def on_get(self, req, resp):
     try:
-      shelly = Shelly(req.get_param("target"), req.get_param("username"), req.get_param("password"), self._timeout)
+      shelly = Shelly.create_with_cfg(req.get_param("target"), self._targetcfg,
+          req.get_param("username"), req.get_param("password"), self._timeout)
       metrics = shelly.get_metrics()
       if req.get_param("save") == "true":
         metrics.add("probetime", int(time.time()), type="counter",
             help="Unixtime this target was probed and saved.")
-        metrics.save_to_file(self._metricsfile)
+        metrics.save_to_file(self._metrics_file)
       resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
       resp.text = prom.exposition.generate_latest(metrics)
     except ShellyException as e:
@@ -250,11 +260,12 @@ class Prober:
 
 
 class Static:
-  def __init__(self, targets, username, password, metricsfile, timeout=5):
+  def __init__(self, targetcfg, targets, username, password, metrics_file, timeout):
+    self._targetcfg = targetcfg
     self._targets = targets
     self._username = username
     self._password = password
-    self._metricsfile = metricsfile
+    self._metrics_file = metrics_file
     self._timeout = timeout
 
   def on_get(self, req, resp):
@@ -262,14 +273,16 @@ class Static:
     for target in self._targets:
       try:
         shelly = Shelly(target, self._username, self._password, self._timeout)
+        shelly = Shelly.create_with_cfg(target, self._targetcfg, self._username,
+            self._password, self._timeout)
         metrics += [shelly.get_metrics()]
       except ShellyException as e:
         print(e)
         m_down = Metrics("shelly", {"name": target})
         m_down.add("down", True, help="Shelly can't be reached")
         metrics += [m_down]
-    if os.path.isfile(self._metricsfile):
-      with open(self._metricsfile, 'rb') as pkl:
+    if os.path.isfile(self._metrics_file):
+      with open(self._metrics_file, 'rb') as pkl:
         for target, metric in pickle.load(pkl).items():
           if target not in self._targets: metrics += [metric]
     metrics = Metrics.merge(metrics)
@@ -277,12 +290,12 @@ class Static:
     resp.text = prom.exposition.generate_latest(metrics)
 
 
-def run(addr, port, statics=[], static_username=None, static_password=None,
-    metricsfile="metrics.pkl", timeout=5):
+def run(cfg):
   api = falcon.App()
-  api.add_route('/metrics', Static(statics, static_username, static_password, metricsfile, timeout))
-  api.add_route('/probe', Prober(metricsfile, timeout))
-  httpd = simple_server.make_server(addr, port, api)
+  api.add_route('/metrics', Static(cfg['targetcfg'], cfg['static_targets'], cfg['username'],
+    cfg['password'], cfg['metrics_file'], cfg['timeout']))
+  api.add_route('/probe', Prober(cfg['targetcfg'], cfg['metrics_file'], cfg['timeout']))
+  httpd = simple_server.make_server(cfg['listen_ip'], cfg['listen_port'], api)
   httpd.serve_forever()
 
 
@@ -290,6 +303,16 @@ def cli_env(env, default=None):
   _env = f"SHELLY_{env}"
   return os.environ.get(_env) if os.environ.get(_env) is not None else default
 
+default_cfg = {
+  "listen_ip": "0.0.0.0",
+  "listen_port": 9686,
+  "timeout": 5,
+  "metrics_file": "metrics.pkl",
+  "static_targets": [],
+  "username": None,
+  "password": None,
+  "targetcfg": {},
+}
 
 def cli():
   import argparse
@@ -313,16 +336,40 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
     Other relevant flags are '-U|--username' and '-P|--password'.
 """, formatter_class=argparse.RawDescriptionHelpFormatter,
       epilog="All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')")
-  parser.add_argument('-l', '--listen-ip', dest='listen_ip', default=cli_env('LISTEN_IP', '0.0.0.0'), help="IP address for the exporter to listen on. Default: 0.0.0.0")
-  parser.add_argument('-p', '--listen-port', dest='listen_port', type=int, default=cli_env('LISTEN_PORT', 9686), help="Port for the exporter to listen on. Default: 9686")
-  parser.add_argument('-s', '--static-targets', dest='static_targets', default=cli_env('STATIC_TARGETS'), help="Comma-separated list of static targets to scrape when querying /metrics")
-  parser.add_argument('-U', '--username', dest='username', default=cli_env('USERNAME'), help="Username for the static targets (same for all)")
-  parser.add_argument('-P', '--password', dest='password', default=cli_env('PASSWORD'), help="Password for the static targets (same for all)")
-  parser.add_argument('-t', '--timeout', dest='timeout', default=cli_env('TIMEOUT'), help="Timeout (in seconds) to use when Scraping shelly devices. Default: 5")
-  parser.add_argument('-f', '--metricsfile', dest='metricsfile', default=cli_env('METRICSFILE', 'metrics.pkl'), help="Pickle file to save metrics too (from /probe?save=true). Default: metrics.pkl")
+  parser.add_argument('-c', '--config-file', dest='config_file', default=cli_env('CONFIG_FILE'),
+      help="Config file. If specified, all other params will be ignored.")
+  parser.add_argument('-l', '--listen-ip', dest='listen_ip', default=cli_env('LISTEN_IP'),
+      help="IP address for the exporter to listen on. Default: 0.0.0.0")
+  parser.add_argument('-p', '--listen-port', dest='listen_port', type=int,
+      default=cli_env('LISTEN_PORT'), help="Port for the exporter to listen on. Default: 9686")
+  parser.add_argument('-s', '--static-targets', dest='static_targets',
+      default=cli_env('STATIC_TARGETS'),
+      help="Comma-separated list of static targets to scrape when querying /metrics")
+  parser.add_argument('-U', '--username', dest='username', default=cli_env('USERNAME'),
+      help="Username for the static targets (same for all)")
+  parser.add_argument('-P', '--password', dest='password', default=cli_env('PASSWORD'),
+      help="Password for the static targets (same for all)")
+  parser.add_argument('-t', '--timeout', dest='timeout', default=cli_env('TIMEOUT'),
+      help="Timeout (in seconds) to use when Scraping shelly devices. Default: 5")
+  parser.add_argument('-C', '--targetcfg', dest='targetcfg', default=cli_env('TARGETCFG'),
+      help="YAML or JSON string containing target config. See example config for help.")
+  parser.add_argument('-f', '--metrics-file', dest='metrics_file', default=cli_env('METRICS_FILE'),
+      help="Pickle file to save metrics too (from /probe?save=true). Default: metrics.pkl")
   args = parser.parse_args()
-  static_targets = [] if args.static_targets == None else args.static_targets.split(',')
-  run(args.listen_ip, args.listen_port, static_targets, args.username, args.password, args.metricsfile, args.timeout)
+  cfg = default_cfg
+  if args.config_file:
+    import yaml
+    with open(args.config_file) as file: cfg = { **default_cfg, **yaml.safe_load(file) }
+  else:
+    if args.listen_ip: cfg['listen_ip'] == args.listen_ip
+    if args.listen_port: cfg['listen_port'] == args.listen_port
+    if args.static_targets: cfg['static_targets'] == args.listen_port.split(',')
+    if args.username: cfg['username'] == args.username
+    if args.password: cfg['password'] == args.password
+    if args.timeout: cfg['timeout'] == args.timeout
+    if args.targetcfg: cfg['targetcfg'] == yaml.safe_load(args.targetcfg)
+    if args.metrics_file: cfg['metrics_file'] == args.metrics_file
+  run(cfg)
 
 
 if __name__ == '__main__':

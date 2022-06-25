@@ -7,9 +7,10 @@ I only implemented for the devices I personally have.
 
 ## Help
 ```
-usage: shelly_exporter.py [-h] [-l LISTEN_IP] [-p LISTEN_PORT]
-                          [-s STATIC_TARGETS] [-U USERNAME] [-P PASSWORD]
-                          [-t TIMEOUT] [-f METRICSFILE]
+usage: shelly_exporter.py [-h] [-c CONFIG_FILE] [-l LISTEN_IP]
+                          [-p LISTEN_PORT] [-s STATIC_TARGETS] [-U USERNAME]
+                          [-P PASSWORD] [-t TIMEOUT] [-C TARGETCFG]
+                          [-f METRICS_FILE]
 
 Prometheus Exporter for Shelly devices.
 
@@ -20,16 +21,20 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   * The '/probe' endpoint will do a single scrape of the target specified
     with the 'target' URL parameter.
     'username' and 'password' parameters can optionally be added if authentication is required.
-    If 'safe' parameter is set to 'true', metrics will aditionally be safed and included in the
+    If 'save' parameter is set to 'true', metrics will aditionally be saved and included in the
     results of the '/metrics' endpoint (Use-case are battery-powered devices that are in sleep mode
     most of the time and wake up to push metrics. Configure /probe URL as URL to push updates to on
     the battery-powered device).
   * The '/metrics' endpoint will scrape all devices specified at startup
-    with the '-s|--static-targets' option, and those saved from the '/probe' endpoint.
+    with the '-s|--static-targets' option, and those saved from the '/probe' endpoint
+    (with static targets overwriting saved probes, if one exists as both).
     Other relevant flags are '-U|--username' and '-P|--password'.
 
 options:
   -h, --help            show this help message and exit
+  -c CONFIG_FILE, --config-file CONFIG_FILE
+                        Config file. If specified, all other params will be
+                        ignored.
   -l LISTEN_IP, --listen-ip LISTEN_IP
                         IP address for the exporter to listen on. Default:
                         0.0.0.0
@@ -45,9 +50,12 @@ options:
   -t TIMEOUT, --timeout TIMEOUT
                         Timeout (in seconds) to use when Scraping shelly
                         devices. Default: 5
-  -f METRICSFILE, --metricsfile METRICSFILE
+  -C TARGETCFG, --targetcfg TARGETCFG
+                        YAML or JSON string containing target config. See
+                        example config for help.
+  -f METRICS_FILE, --metrics-file METRICS_FILE
                         Pickle file to save metrics too (from
-                        /probe?safe=true). Default: metrics.pkl
+                        /probe?save=true). Default: metrics.pkl
 
 All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')
 ```
