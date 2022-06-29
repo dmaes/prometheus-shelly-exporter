@@ -5,8 +5,23 @@ listen_ip: 0.0.0.0
 # Port to listen on
 listen_port: 9686
 
-# File to save probe-and-save metrics too
+# File (or S3 path) to save probe-and-save metrics to
 metrics_file: metrics.pkl
+
+# S3 bucket to save metrics_file to (useful for dynamic containerized deployments)
+s3_bucket: null
+
+# Optional S3 endpoint url (must include http/https if used)
+s3_url: null
+
+# Optional S3 Access Key ID
+s3_key_id: ""
+
+# Optional S3 Secret Access Key
+s3_secret_key: ""
+
+# False to not verify S3 SSL, or path to custom CA to use
+s3_verify: null
 
 # Default timeout to use for targets (in seconds)
 timeout: 5

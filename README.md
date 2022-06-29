@@ -10,7 +10,10 @@ I only implemented for the devices I personally have.
 usage: shelly_exporter.py [-h] [-c CONFIG_FILE] [-l LISTEN_IP]
                           [-p LISTEN_PORT] [-s STATIC_TARGETS] [-U USERNAME]
                           [-P PASSWORD] [-t TIMEOUT] [-C TARGETCFG]
-                          [-f METRICS_FILE]
+                          [-f METRICS_FILE] [--s3-bucket S3_BUCKET]
+                          [--s3-url S3_URL] [--s3-key-id S3_KEY_ID]
+                          [--s3-secret-key S3_SECRET_KEY]
+                          [--s3-verify S3_VERIFY]
 
 Prometheus Exporter for Shelly devices.
 
@@ -54,8 +57,21 @@ options:
                         YAML or JSON string containing target config. See
                         example config for help.
   -f METRICS_FILE, --metrics-file METRICS_FILE
-                        Pickle file to save metrics too (from
+                        Pickle file or S3 path to save metrics too (from
                         /probe?save=true). Default: metrics.pkl
+  --s3-bucket S3_BUCKET
+                        S3 bucket to save metrics file in. Usefull in dynamic
+                        containerized setup
+  --s3-url S3_URL       Optional S3 endpoint url to use. Must include
+                        http/https, if used.
+  --s3-key-id S3_KEY_ID
+                        Optinal Access Key ID to use when connection to S3
+  --s3-secret-key S3_SECRET_KEY
+                        Optional Secret Access Key to use when connection to
+                        S3
+  --s3-verify S3_VERIFY
+                        Set 'false' to not verify S3 SSL, or path to a custom
+                        CA to use.
 
 All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')
 ```

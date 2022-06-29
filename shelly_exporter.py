@@ -56,21 +56,57 @@ class Metrics:
 
 
 class MetricsFile:
-  def __init__(self, path):
+  def __init__(self, path,
+      s3_bucket=None, s3_url=None, s3_key_id="", s3_secret_key="", s3_verify=True):
     self._path = path
+    self._s3_bucket = s3_bucket
+    self._s3_url = s3_url
+    self._s3_key_id = s3_key_id
+    self._s3_secret_key = s3_secret_key
+    self._s3_verify = s3_verify
+    if sefl._s3_bucket:
+      import random
+      import string
+      self._s3_tmp = ".tmp-" + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
+      while os.paht.exists(self._s3_tmp):
+        self._s3_tmp = ".tmp-" + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
+      import boto3
+      self._init_s3()
+    else: self._init_file()
 
   def _init_file(self):
     if not os.path.isfile(self._path):
-      with open(self._path, 'wb') as pkl: pikcle.dump({}, pkl)
+      self._write_metrics({})
       print(f"Initialized metrics pickle on {self._path}")
     else: print(f"Re-using existing metrics pickle from {self._path}")
 
+  def _get_s3():
+    return boto3.client("s3", endpoint_url=self._s3_url, verify=self._s3_verify,
+        aws_access_key_id=self._s3_key_id, aws_secret_access_key=self._s3_secret_key)
+
+  def _init_s3(self):
+    s3 = self._get_s3()
+    for c in s3.list_objects(Bucket=self._s3_bucket)['Contents']:
+      if self._path == c['Key']:
+        print(f"Re-using existing metrics pickle from {self._path} on S3")
+        return
+    self._write_metrics({})
+    print(f"Initialized metrics pickle on {self._path} on S3")
+
   def get_metrics(self):
-    with open(self._metrics_file, 'rb') as pkl:
-      return pickle.load(pkl)
+    path = self._s3_tmp if self._s3_bucket else self._path
+    if self._s3_bucket: s3.download_file(self._s3_bucket, self._path, path)
+    with open(path, 'rb') as pkl: metrics = pickle.load(pkl)
+    if self._s3_bucket: os.remove(path)
+    return metrics
 
   def _write_metrics(self, metrics):
-    with open(self._path, 'wb') as pkl: pickle.dump(metrics, pkl)
+    path = self._s3_tmp if self._s3_bucket else self._path
+    with open(path, 'wb') as pkl: pickle.dump(metrics, pkl)
+    if not self._s3_bucket: return
+    s3 = self._get_s3()
+    s3.upload_file(path, self._s3_bucket, self._path)
+    os.remove(path)
 
   def add_metrics(self, name, metrics):
     all_metrics = self.get_metrics()
@@ -328,6 +364,11 @@ default_cfg = {
   "username": None,
   "password": None,
   "targetcfg": {},
+  "s3_bucket": None,
+  "s3_url": None,
+  "s3_key_id": "",
+  "s3_secret_key": "",
+  "s3_verify": None,
 }
 
 def cli():
@@ -370,21 +411,36 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   parser.add_argument('-C', '--targetcfg', dest='targetcfg', default=cli_env('TARGETCFG'),
       help="YAML or JSON string containing target config. See example config for help.")
   parser.add_argument('-f', '--metrics-file', dest='metrics_file', default=cli_env('METRICS_FILE'),
-      help="Pickle file to save metrics too (from /probe?save=true). Default: metrics.pkl")
+      help="Pickle file or S3 path to save metrics too (from /probe?save=true). Default: metrics.pkl")
+  parser.add_argument('--s3-bucket', dest='s3_bucket', default=cli_env('S3_BUCKET'),
+      help="S3 bucket to save metrics file in. Usefull in dynamic containerized setup")
+  parser.add_argument('--s3-url', dest='s3_url', default=cli_env('S3_URL'),
+      help="Optional S3 endpoint url to use. Must include http/https, if used.")
+  parser.add_argument('--s3-key-id', dest='s3_key_id', default=cli_env('S3_KEY_ID'),
+      help="Optinal Access Key ID to use when connection to S3")
+  parser.add_argument('--s3-secret-key', dest='s3_secret_key', default=cli_env('S3_SECRET_KEY'),
+      help="Optional Secret Access Key to use when connection to S3")
+  parser.add_argument('--s3-verify', dest='s3_verify', default=cli_env('S3_VERIFY'),
+      help="Set 'false' to not verify S3 SSL, or path to a custom CA to use.")
   args = parser.parse_args()
   cfg = default_cfg
   if args.config_file:
     import yaml
     with open(args.config_file) as file: cfg = { **default_cfg, **yaml.safe_load(file) }
   else:
-    if args.listen_ip: cfg['listen_ip'] == args.listen_ip
-    if args.listen_port: cfg['listen_port'] == args.listen_port
-    if args.static_targets: cfg['static_targets'] == args.listen_port.split(',')
-    if args.username: cfg['username'] == args.username
-    if args.password: cfg['password'] == args.password
-    if args.timeout: cfg['timeout'] == args.timeout
-    if args.targetcfg: cfg['targetcfg'] == yaml.safe_load(args.targetcfg)
-    if args.metrics_file: cfg['metrics_file'] == args.metrics_file
+    if args.listen_ip: cfg['listen_ip'] = args.listen_ip
+    if args.listen_port: cfg['listen_port'] = args.listen_port
+    if args.static_targets: cfg['static_targets'] = args.listen_port.split(',')
+    if args.username: cfg['username'] = args.username
+    if args.password: cfg['password'] = args.password
+    if args.timeout: cfg['timeout'] = args.timeout
+    if args.targetcfg: cfg['targetcfg'] = yaml.safe_load(args.targetcfg)
+    if args.metrics_file: cfg['metrics_file'] = args.metrics_file
+    if args.s3_bucket: cfg['s3']['bucket'] = args.s3_bucket
+    if args.s3_url: cfg['s3_url'] = args.s3_url
+    if args.s3_key_id: cfg['s3_key_id'] = args.s3_key_id
+    if args.s3_secret_key: cfg['s3_secret_key'] = args.s3_secret_key
+    if args.s3_verify: cfg['s3_verify'] = False if args.s3_verify == 'false' else args.s3_verify
   run(cfg)
 
 
