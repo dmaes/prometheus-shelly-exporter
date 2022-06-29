@@ -392,7 +392,7 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
     (with static targets overwriting saved probes, if one exists as both).
     Other relevant flags are '-U|--username' and '-P|--password'.
 ''', formatter_class=argparse.RawDescriptionHelpFormatter,
-      epilog='All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')')
+      epilog="All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')")
   parser.add_argument('-c', '--config-file', dest='config_file', default=cli_env('CONFIG_FILE'),
       help='Config file. If specified, all other params will be ignored.')
   parser.add_argument('-l', '--listen-ip', dest='listen_ip', default=cli_env('LISTEN_IP'),
@@ -421,7 +421,7 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   parser.add_argument('--s3-secret-key', dest='s3_secret_key', default=cli_env('S3_SECRET_KEY'),
       help='Optional Secret Access Key to use when connection to S3')
   parser.add_argument('--s3-verify', dest='s3_verify', default=cli_env('S3_VERIFY'),
-      help='Set 'false' to not verify S3 SSL, or path to a custom CA to use.')
+      help="Set 'false' to not verify S3 SSL, or path to a custom CA to use.")
   args = parser.parse_args()
   cfg = default_cfg
   if args.config_file:
