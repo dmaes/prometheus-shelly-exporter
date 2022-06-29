@@ -13,7 +13,7 @@ usage: shelly_exporter.py [-h] [-c CONFIG_FILE] [-l LISTEN_IP]
                           [-f METRICS_FILE] [--s3-bucket S3_BUCKET]
                           [--s3-url S3_URL] [--s3-key-id S3_KEY_ID]
                           [--s3-secret-key S3_SECRET_KEY]
-                          [--s3-verify S3_VERIFY]
+                          [--s3-verify S3_VERIFY] [-e EXPIRE]
 
 Prometheus Exporter for Shelly devices.
 
@@ -72,6 +72,9 @@ options:
   --s3-verify S3_VERIFY
                         Set 'false' to not verify S3 SSL, or path to a custom
                         CA to use.
+  -e EXPIRE, --expire EXPIRE
+                        Expire saved metrics after x hours. 0 to never expire.
+                        Default: 48
 
 All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')
 ```

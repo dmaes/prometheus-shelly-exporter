@@ -23,6 +23,9 @@ s3_secret_key: ""
 # False to not verify S3 SSL, or path to custom CA to use
 s3_verify: null
 
+# Expire saved metrics after x hours
+expire: 48
+
 # Default timeout to use for targets (in seconds)
 timeout: 5
 
