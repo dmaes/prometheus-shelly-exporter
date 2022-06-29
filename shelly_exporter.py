@@ -61,8 +61,8 @@ class Metrics:
 
 
 class MetricsFile:
-  def __init__(self, path,
-      s3_bucket=None, s3_url=None, s3_key_id='', s3_secret_key='', s3_verify=None):
+  def __init__(self, path, s3_bucket=None, s3_url=None, s3_key_id='', s3_secret_key='',
+      s3_verify=None, expire=0):
     self._path = path
     self._s3_bucket = s3_bucket
     self._s3_url = s3_url
@@ -75,10 +75,15 @@ class MetricsFile:
         self._s3_tmp = '.tmp-' + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
       self._init_s3()
     else: self._init_file()
+    self._expire = expire
+
+  @property
+  def _default(self):
+    return { 'metrics': {}, 'timestamps': {}, 'last_cleanup': int(time.time()) }
 
   def _init_file(self):
     if not os.path.isfile(self._path):
-      self._write_metrics({})
+      self._write_metrics(self._default)
       print(f"Initialized metrics pickle on {self._path}")
     else: print(f"Re-using existing metrics pickle from {self._path}")
 
@@ -92,15 +97,27 @@ class MetricsFile:
       if self._path == c['Key']:
         print(f"Re-using existing metrics pickle from {self._path} on S3")
         return
-    self._write_metrics({})
+    self._write_metrics(self._default)
     print(f"Initialized metrics pickle on {self._path} on S3")
 
-  def get_metrics(self):
+  def _get_metrics(self):
     path = self._s3_tmp if self._s3_bucket else self._path
     if self._s3_bucket: self._get_s3().download_file(self._s3_bucket, self._path, path)
     with open(path, 'rb') as pkl: metrics = pickle.load(pkl)
     if self._s3_bucket: os.remove(path)
-    return metrics
+    if not self._expire: return metrics
+    now = int(time.time())
+    if metrics['last_cleanup'] > now - 3600: return metrics
+    oldest = now - self._expire
+    cleaned = self._default
+    for name, timestamp in metrics['timestamps'].items():
+      if timestamp > oldest:
+        cleaned['metrics'][name] = metrics['metrics'][name]
+        cleaned['timestamps'][name] = timestamp
+    return cleaned
+
+  def get_metrics(self):
+    return self._get_metrics()['metrics']
 
   def _write_metrics(self, metrics):
     path = self._s3_tmp if self._s3_bucket else self._path
@@ -111,8 +128,9 @@ class MetricsFile:
     os.remove(path)
 
   def add_metrics(self, name, metrics):
-    all_metrics = self.get_metrics()
-    all_metrics[name] = metrics
+    all_metrics = self._get_metrics()
+    all_metrics['metrics'][name] = metrics
+    all_metrics['timestamps'][name] = int(time.time())
     self._write_metrics(all_metrics)
 
 
@@ -346,7 +364,7 @@ class Static:
 def run(cfg):
   api = falcon.App()
   metrics_file = MetricsFile(cfg['metrics_file'], cfg['s3_bucket'], cfg['s3_url'],
-      cfg['s3_key_id'], cfg['s3_secret_key'], cfg['s3_verify'])
+      cfg['s3_key_id'], cfg['s3_secret_key'], cfg['s3_verify'], int(cfg['expire'])*3600)
   api.add_route('/metrics', Static(cfg['targetcfg'], cfg['static_targets'], cfg['username'],
     cfg['password'], metrics_file, cfg['timeout']))
   api.add_route('/probe', Prober(cfg['targetcfg'], metrics_file, cfg['timeout']))
@@ -372,6 +390,7 @@ default_cfg = {
   's3_key_id': '',
   's3_secret_key': '',
   's3_verify': None,
+  'expire': 48,
 }
 
 def cli():
@@ -424,6 +443,8 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
       help='Optional Secret Access Key to use when connection to S3')
   parser.add_argument('--s3-verify', dest='s3_verify', default=cli_env('S3_VERIFY'),
       help="Set 'false' to not verify S3 SSL, or path to a custom CA to use.")
+  parser.add_argument('-e', '--expire', dest='expire', default=cli_env('EXPIRE'),
+      help="Expire saved metrics after x hours. 0 to never expire. Default: 48")
   args = parser.parse_args()
   cfg = default_cfg
   if args.config_file:
@@ -442,6 +463,7 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
     if args.s3_key_id: cfg['s3_key_id'] = args.s3_key_id
     if args.s3_secret_key: cfg['s3_secret_key'] = args.s3_secret_key
     if args.s3_verify: cfg['s3_verify'] = False if args.s3_verify == 'false' else args.s3_verify
+    if args.expire: cfg['expire'] = args.expire
   run(cfg)
 
 
