@@ -1,4 +1,5 @@
 argparse
+boto3
 falcon
 prometheus_client
 pyyaml
