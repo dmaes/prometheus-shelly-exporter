@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 
+import boto3
 import falcon
 import json
 import os
@@ -70,7 +71,6 @@ class MetricsFile:
       self._s3_tmp = '.tmp-' + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
       while os.path.exists(self._s3_tmp):
         self._s3_tmp = '.tmp-' + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
-      import boto3
       self._init_s3()
     else: self._init_file()
 
