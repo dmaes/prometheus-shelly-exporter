@@ -93,10 +93,12 @@ class MetricsFile:
 
   def _init_s3(self):
     s3 = self._get_s3()
-    for c in s3.list_objects(Bucket=self._s3_bucket)['Contents']:
-      if self._path == c['Key']:
-        print(f"Re-using existing metrics pickle from {self._path} on S3")
-        return
+    try:
+      for c in s3.list_objects(Bucket=self._s3_bucket)['Contents']:
+        if self._path == c['Key']:
+          print(f"Re-using existing metrics pickle from {self._path} on S3")
+          return
+    except KeyError: pass
     self._write_metrics(self._default)
     print(f"Initialized metrics pickle on {self._path} on S3")
 
