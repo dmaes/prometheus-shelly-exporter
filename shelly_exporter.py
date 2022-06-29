@@ -80,7 +80,7 @@ class MetricsFile:
       print(f"Initialized metrics pickle on {self._path}")
     else: print(f"Re-using existing metrics pickle from {self._path}")
 
-  def _get_s3():
+  def _get_s3(self):
     return boto3.client('s3', endpoint_url=self._s3_url, verify=self._s3_verify,
         aws_access_key_id=self._s3_key_id, aws_secret_access_key=self._s3_secret_key)
 
@@ -95,7 +95,7 @@ class MetricsFile:
 
   def get_metrics(self):
     path = self._s3_tmp if self._s3_bucket else self._path
-    if self._s3_bucket: s3.download_file(self._s3_bucket, self._path, path)
+    if self._s3_bucket: self._get_s3().download_file(self._s3_bucket, self._path, path)
     with open(path, 'rb') as pkl: metrics = pickle.load(pkl)
     if self._s3_bucket: os.remove(path)
     return metrics
