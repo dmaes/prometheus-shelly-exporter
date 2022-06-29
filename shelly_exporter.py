@@ -117,7 +117,7 @@ class MetricsFile:
 
 class Shelly:
   def __init__(self, name, username=None, password=None, timeout=5, extra_labels={}):
-    if name is None: raise ShellyException(''name' cannot be empty')
+    if name is None: raise ShellyException("'name' cannot be empty")
     self._name = name
     self._auth = None if None in (username, password) else (username, password)
     self._timeout = timeout
