@@ -53,12 +53,29 @@ class Metrics:
           metrics.add(name, value["value"], value["labels"], metric["help"], metric["type"])
     return metrics
 
-  def save_to_file(self, file, id_label="name"):
-    if os.path.isfile(file):
-      with open(file, 'rb') as pkl: pkl_metrics = pickle.load(pkl)
-    else: pkl_metrics = {}
-    pkl_metrics[self._labels[id_label]] = self
-    with open(file, 'wb') as pkl: pickle.dump(pkl_metrics, pkl)
+
+
+class MetricsFile:
+  def __init__(self, path):
+    self._path = path
+
+  def _init_file(self):
+    if not os.path.isfile(self._path):
+      with open(self._path, 'wb') as pkl: pikcle.dump({}, pkl)
+      print(f"Initialized metrics pickle on {self._path}")
+    else: print(f"Re-using existing metrics pickle from {self._path}")
+
+  def get_metrics(self):
+    with open(self._metrics_file, 'rb') as pkl:
+      return pickle.load(pkl)
+
+  def _write_metrics(self, metrics):
+    with open(self._path, 'wb') as pkl: pickle.dump(metrics, pkl)
+
+  def add_metrics(self, name, metrics):
+    all_metrics = self.get_metrics()
+    all_metrics[name] = metrics
+    self._write_metrics(all_metrics)
 
 
 
@@ -251,7 +268,7 @@ class Prober:
       if req.get_param("save") == "true":
         metrics.add("probetime", int(time.time()), type="counter",
             help="Unixtime this target was probed and saved.")
-        metrics.save_to_file(self._metrics_file)
+        self._metrics_file.add_metrics(shelly.name, metrics)
       resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
       resp.text = prom.exposition.generate_latest(metrics)
     except ShellyException as e:
@@ -281,10 +298,8 @@ class Static:
         m_down = Metrics("shelly", {"name": target})
         m_down.add("down", True, help="Shelly can't be reached")
         metrics += [m_down]
-    if os.path.isfile(self._metrics_file):
-      with open(self._metrics_file, 'rb') as pkl:
-        for target, metric in pickle.load(pkl).items():
-          if target not in self._targets: metrics += [metric]
+    for target, metric in self._metrics_file.get_metrics().items():
+      if target not in self._targets: metrics += [metric]
     metrics = Metrics.merge(metrics)
     resp.set_header('Content-Type', prom.exposition.CONTENT_TYPE_LATEST)
     resp.text = prom.exposition.generate_latest(metrics)
@@ -292,9 +307,10 @@ class Static:
 
 def run(cfg):
   api = falcon.App()
+  metrics_file = MetricsFile(cfg['metrics_file'])
   api.add_route('/metrics', Static(cfg['targetcfg'], cfg['static_targets'], cfg['username'],
-    cfg['password'], cfg['metrics_file'], cfg['timeout']))
-  api.add_route('/probe', Prober(cfg['targetcfg'], cfg['metrics_file'], cfg['timeout']))
+    cfg['password'], metrics_file, cfg['timeout']))
+  api.add_route('/probe', Prober(cfg['targetcfg'], metrics_file, cfg['timeout']))
   httpd = simple_server.make_server(cfg['listen_ip'], cfg['listen_port'], api)
   httpd.serve_forever()
 
