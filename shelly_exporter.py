@@ -344,7 +344,7 @@ class Static:
 def run(cfg):
   api = falcon.App()
   metrics_file = MetricsFile(cfg['metrics_file'], cfg['s3_bucket'], cfg['s3_url'],
-      cfg['s3_key_id'], cfg['s3_secret_key'], cfg['s3_verify']):
+      cfg['s3_key_id'], cfg['s3_secret_key'], cfg['s3_verify'])
   api.add_route('/metrics', Static(cfg['targetcfg'], cfg['static_targets'], cfg['username'],
     cfg['password'], metrics_file, cfg['timeout']))
   api.add_route('/probe', Prober(cfg['targetcfg'], metrics_file, cfg['timeout']))
