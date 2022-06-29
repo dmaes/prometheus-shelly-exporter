@@ -57,7 +57,7 @@ class Metrics:
 
 class MetricsFile:
   def __init__(self, path,
-      s3_bucket=None, s3_url=None, s3_key_id='', s3_secret_key='', s3_verify=True):
+      s3_bucket=None, s3_url=None, s3_key_id='', s3_secret_key='', s3_verify=None):
     self._path = path
     self._s3_bucket = s3_bucket
     self._s3_url = s3_url
@@ -343,7 +343,8 @@ class Static:
 
 def run(cfg):
   api = falcon.App()
-  metrics_file = MetricsFile(cfg['metrics_file'])
+  metrics_file = MetricsFile(cfg['metrics_file'], cfg['s3_bucket'], cfg['s3_url'],
+      cfg['s3_key_id'], cfg['s3_secret_key'], cfg['s3_verify']):
   api.add_route('/metrics', Static(cfg['targetcfg'], cfg['static_targets'], cfg['username'],
     cfg['password'], metrics_file, cfg['timeout']))
   api.add_route('/probe', Prober(cfg['targetcfg'], metrics_file, cfg['timeout']))
