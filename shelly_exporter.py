@@ -68,7 +68,7 @@ class MetricsFile:
       import random
       import string
       self._s3_tmp = '.tmp-' + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
-      while os.paht.exists(self._s3_tmp):
+      while os.path.exists(self._s3_tmp):
         self._s3_tmp = '.tmp-' + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
       import boto3
       self._init_s3()
