@@ -1,15 +1,19 @@
 #! /usr/bin/env python3
 
+import argparse
 import boto3
 import falcon
 import json
 import os
 import pickle
 import prometheus_client as prom
+import random
 import re
 import requests
+import string
 import time
 from wsgiref import simple_server
+import yaml
 
 
 class ShellyException(Exception):
@@ -66,8 +70,6 @@ class MetricsFile:
     self._s3_secret_key = s3_secret_key
     self._s3_verify = s3_verify
     if self._s3_bucket:
-      import random
-      import string
       self._s3_tmp = '.tmp-' + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
       while os.path.exists(self._s3_tmp):
         self._s3_tmp = '.tmp-' + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
@@ -373,7 +375,6 @@ default_cfg = {
 }
 
 def cli():
-  import argparse
   parser = argparse.ArgumentParser(description='''
 Prometheus Exporter for Shelly devices.
 
@@ -426,7 +427,6 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   args = parser.parse_args()
   cfg = default_cfg
   if args.config_file:
-    import yaml
     with open(args.config_file) as file: cfg = { **default_cfg, **yaml.safe_load(file) }
   else:
     if args.listen_ip: cfg['listen_ip'] = args.listen_ip
