@@ -64,7 +64,7 @@ class MetricsFile:
     self._s3_key_id = s3_key_id
     self._s3_secret_key = s3_secret_key
     self._s3_verify = s3_verify
-    if sefl._s3_bucket:
+    if self._s3_bucket:
       import random
       import string
       self._s3_tmp = '.tmp-' + ''.join(random.choice(string.ascii_lowercase) for i in range(4))
