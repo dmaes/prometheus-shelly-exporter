@@ -24,7 +24,7 @@ s3_secret_key: ""
 s3_verify: null
 
 # Expire saved metrics after x hours
-expire: 48
+expire: 72
 
 # Default timeout to use for targets (in seconds)
 timeout: 5
