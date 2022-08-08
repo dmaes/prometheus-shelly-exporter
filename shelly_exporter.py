@@ -392,7 +392,7 @@ default_cfg = {
   's3_key_id': '',
   's3_secret_key': '',
   's3_verify': None,
-  'expire': 72,
+  'expire': 163,
 }
 
 def cli():
@@ -446,7 +446,7 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   parser.add_argument('--s3-verify', dest='s3_verify', default=cli_env('S3_VERIFY'),
       help="Set 'false' to not verify S3 SSL, or path to a custom CA to use.")
   parser.add_argument('-e', '--expire', dest='expire', default=cli_env('EXPIRE'),
-      help="Expire saved metrics after x hours. 0 to never expire. Default: 72")
+      help="Expire saved metrics after x hours. 0 to never expire. Default: 163")
   args = parser.parse_args()
   cfg = default_cfg
   if args.config_file:

@@ -74,7 +74,7 @@ options:
                         CA to use.
   -e EXPIRE, --expire EXPIRE
                         Expire saved metrics after x hours. 0 to never expire.
-                        Default: 48
+                        Default: 163
 
 All parameters can be supplied as env vars in 'SHELLY_<LONG_ARG>' form (e.g. 'SHELLY_LISTEN_PORT')
 ```
