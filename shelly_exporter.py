@@ -454,7 +454,7 @@ Device-specific metrics are auto-discovered based on the 'type' value of the '/s
   else:
     if args.listen_ip: cfg['listen_ip'] = args.listen_ip
     if args.listen_port: cfg['listen_port'] = args.listen_port
-    if args.static_targets: cfg['static_targets'] = args.listen_port.split(',')
+    if args.static_targets: cfg['static_targets'] = args.static_targets.split(',')
     if args.username: cfg['username'] = args.username
     if args.password: cfg['password'] = args.password
     if args.timeout: cfg['timeout'] = args.timeout
